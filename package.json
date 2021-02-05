@@ -16,9 +16,7 @@
     "url": "https://github.com/samlanning/tree-sitter-hast"
   },
   "devDependencies": {
-    "@types/cson": "^0.0.31",
     "@types/node": "^12.0.8",
-    "@types/season": "^6.0.0",
     "gulp": "^3.9.1",
     "gulp-clean": "^0.3.2",
     "gulp-sourcemaps": "1.6.0",
@@ -34,7 +32,6 @@
   "dependencies": {
     "@types/unist": "^2.0.3",
     "highlight-tree-sitter": "^1.0.0",
-    "season": "^6.0.2",
-    "tree-sitter": "^0.15.5"
+    "tree-sitter": "^0.17.1"
   }
 }

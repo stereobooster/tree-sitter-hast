@@ -18,8 +18,8 @@
     "test-fix": "TEST_FIX=true mocha --opts mocha.opts"
   },
   "dependencies": {
-    "@atom-languages/language-typescript": "^0.5.0",
-    "language-javascript": "^0.128.0-0",
+    "tree-sitter-typescript": "^0.16.1",
+    "tree-sitter-javascript": "github:tree-sitter/tree-sitter-javascript#3f8b62f",
     "mocha": "^6.1.4"
   }
 }

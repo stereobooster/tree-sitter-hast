@@ -1,18 +1,14 @@
 /**
  * Load grammars and scopeMappings from atom language packages
  */
-import * as fs from 'fs';
-import * as path from 'path';
-import {promisify} from 'util';
-import * as cson from 'season';
+import * as fs from "fs";
+import * as path from "path";
+import { promisify } from "util";
 
 const exists = promisify(fs.exists);
-const readdir = promisify(fs.readdir);
-const loadCson = promisify(cson.readFile);
+const readFile = promisify(fs.readFile);
 
-type ScopeMappings = {[selector: string]: string};
-
-const TREE_SITTER_SPEC_FILENAME = /^tree-sitter-(.*)\.cson$/;
+type ScopeMappings = { [selector: string]: string };
 
 export interface PreparedLanguage {
   /**
@@ -32,23 +28,24 @@ export interface PreparedLanguage {
 
 export type PreparedLanguages = Map<string, PreparedLanguage>;
 
-interface TreeSitterAtomSpec {
-  parser: string;
-  scopes: any;
-}
-
-function isTreeSitterAtomSpec(value: unknown): value is TreeSitterAtomSpec {
-  return (
-    typeof (value as TreeSitterAtomSpec).parser === 'string' &&
-    !!(value as TreeSitterAtomSpec).scopes
-  );
+interface TreeSitterSpec {
+  scope: string;
+  "file-types": string[];
+  path: string;
+  highlights: string[];
+  locals: string[];
+  injections: string;
+  "injection-regex"?: string;
+  "content-regex"?: string;
 }
 
 /**
  * Load the grammar and scope mappings from an APM (atom) package like "language-javascript"
  * @param packageName
  */
-export async function loadLanguagesFromPackage(packageName: string): Promise<PreparedLanguages> {
+export async function loadLanguagesFromPackage(
+  packageName: string
+): Promise<PreparedLanguages> {
   const langs = new Map<string, PreparedLanguage>();
 
   // Determine the location of the language package
@@ -59,8 +56,7 @@ export async function loadLanguagesFromPackage(packageName: string): Promise<Pre
   if (require.main) {
     for (let i = require.main.paths.length - 1; i >= 0; i--) {
       const path = require.main.paths[i];
-      if (lookup_paths.indexOf(path) === -1)
-        lookup_paths.unshift(path);
+      if (lookup_paths.indexOf(path) === -1) lookup_paths.unshift(path);
     }
   }
   let packageDir: string | null = null;
@@ -74,44 +70,37 @@ export async function loadLanguagesFromPackage(packageName: string): Promise<Pre
   if (!packageDir) throw new Error(`could not find package: ${packageName}`);
 
   // Get list of grammars
-  const grammarsDir = path.join(packageDir, 'grammars');
-  const files = await readdir(grammarsDir).catch(() =>
-    Promise.reject(new Error(`Package ${packageName} is not a valid atom language package`)));
-  for (const filename of files) {
-    const match = TREE_SITTER_SPEC_FILENAME.exec(filename);
-    if (match) {
-      const lang = match[1];
-      const spec = await loadCson(path.join(grammarsDir, filename));
+  const grammarsPackage = path.join(packageDir, "package.json");
 
-      // Go through spec, and patch regexes
-      patchRegexes(spec);
-
-      if (isTreeSitterAtomSpec(spec)) {
-        const grammarPath = require.resolve(spec.parser, {paths: lookup_paths});
-        const grammar = require(grammarPath);
-        langs.set(lang, {
-          grammar, scopeMappings: spec.scopes
-        });
+  const specs = await readFile(grammarsPackage, "utf8")
+    .then((data) => JSON.parse(data))
+    .then((data) => {
+      if (data["tree-sitter"]) {
+        return data["tree-sitter"] as TreeSitterSpec[];
       } else {
-        throw new Error(`Invalid language specification for ${lang} in ${packageName}`);
+        return Promise.reject();
       }
-    }
+    })
+    .catch(() =>
+      Promise.reject(
+        new Error(`Package ${packageName} is not a valid language package`)
+      )
+    );
+
+  for (const spec of specs) {
+    const grammarPath = require.resolve(spec.path, {
+      paths: lookup_paths,
+    });
+    const grammar = require(grammarPath);
+    spec["file-types"].forEach(lang => {
+      langs.set(lang, {
+        grammar,
+        // it should be  "highlights": "queries/highlights.scm"
+        // scopeMappings: spec.scope,
+      });
+    });
+
   }
 
   return langs;
-}
-
-// TODO: move this into highlight-tree-sitter
-function patchRegexes(value: unknown) {
-  if (value instanceof Object) {
-    for (const key of Object.keys(value)) {
-      patchRegexes(value[key]);
-    }
-    const v = value as {
-      match?: string | RegExp;
-    };
-    if (typeof v.match === 'string') {
-      v.match = new RegExp(v.match);
-    }
-  }
 }
